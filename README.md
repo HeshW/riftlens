@@ -27,8 +27,12 @@ LegacyTech design system.
 - **Fixed 16:9 window** like the League client (1024×576 to 1920×1080). The layout is drawn at
   1280×720 and scaled.
 - **Auto-updates** from GitHub Releases.
-- Rate limits: when Riot's limit is hit, RiftLens waits and retries (up to 30 s) instead of
-  failing.
+- **Full history in the background**: the first 10 games show right away, then RiftLens keeps
+  loading older games (all available by default, or the last 20/50/100 in Settings) so the
+  Overview and Champions stats cover the whole history. The match list grows as you scroll.
+- **Saved matches**: finished games are saved to disk (`%LOCALAPPDATA%\me.legacytech.riftlens`),
+  so opening a profile again only fetches new games. Settings shows the size and can clear it.
+- Rate limits: when Riot's limit is hit, RiftLens waits it out and continues instead of failing.
 
 ## Install
 
@@ -42,8 +46,8 @@ The key typed in Settings is saved in the app's config folder
 
 ## Develop
 
-1. Copy `.env.example` to `.env` and paste your Riot key after `RIOT_API_KEY=`
-   (a `.env` key wins over the Settings key). Development keys expire every 24 hours; the app
+1. Paste your key in Settings, or copy `.env.example` to `.env` and paste it after
+   `RIOT_API_KEY=`. The Settings key always wins; `.env` is only read by dev builds. Development keys expire every 24 hours; the app
    re-reads the key on every search.
 2. `npm install`
 3. `npm run tauri dev`
@@ -76,7 +80,8 @@ private key means existing installs can't verify future updates, so back it up.
 ## Limits
 
 - A development or personal key allows 100 requests per 2 minutes. A fresh profile costs about
-  16 calls, "Load more" about 11, opening a live game about 10.
+  16 calls, opening a live game about 10, and the full history about one call per game (around
+  20 minutes for 1,000 games the first time; saved matches make later visits fast).
 - Riot's policy says development keys aren't for public products. Releases are public so the
   updater can reach them, but each user needs their own key. Before promoting RiftLens, move
   the key to a small server and apply for a production key.

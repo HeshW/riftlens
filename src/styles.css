@@ -1341,6 +1341,16 @@ button.player-link:hover {
   color: var(--cyan);
 }
 
+.loading-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font: 500 11.5px var(--display);
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+}
+
 .tags {
   display: flex;
   flex-wrap: wrap;

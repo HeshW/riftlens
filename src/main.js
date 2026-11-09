@@ -51,7 +51,14 @@ let selectedChamp = null;
 const expanded = new Set();
 let liveRanks = null;
 let client = null; // League client status
-let loadingMore = false;
+// Background loading of older games up to the "Games to load" setting.
+let loadToken = 0;
+let filling = false;
+let fillStatus = null;
+let extraGames = 0;
+// Match rows drawn in the history; grows as you scroll (all loaded games still count in stats).
+const ROW_STEP = 20;
+let shownRows = ROW_STEP;
 
 /* ---------- storage ---------- */
 const store = {
@@ -77,6 +84,7 @@ const settings = {
   autoProfile: true,
   autoLive: true,
   autoUpdate: true,
+  gamesToLoad: 0, // 0 = all available (default, so champion stats cover the whole history)
   ...store.get("settings", {}),
 };
 const saveSettings = () => store.set("settings", settings);
@@ -508,6 +516,7 @@ function queueChips() {
         </button>`
         )
         .join("")}
+      ${loadingNote()}
     </div>`;
 }
 
@@ -600,10 +609,21 @@ function matchDetails(m) {
   return `<div class="details">${m.teams.map(table).join("")}</div>`;
 }
 
-const moreButton = () =>
-  hasMore
-    ? `<button type="button" class="btn btn--ghost more" data-action="more" ${loadingMore ? "disabled" : ""}>${loadingMore ? "Loading…" : "Load more games"}</button>`
-    : "";
+const moreButton = () => {
+  if (filling) return "";
+  if (hasMore) return `<button type="button" class="btn btn--ghost more" data-action="more">Load 20 more games</button>`;
+  return matches.length > MATCH_PAGE ? `<p class="tiny note">That's all of this player's available games.</p>` : "";
+};
+
+const MATCH_PAGE = 10;
+const targetGames = () => (settings.gamesToLoad || Infinity) + extraGames;
+
+function loadingNote() {
+  if (!filling) return "";
+  const target = targetGames();
+  const text = fillStatus ?? `Loading games… ${matches.length}${Number.isFinite(target) ? ` / ${target}` : ""}`;
+  return `<span class="loading-note"><span class="signal signal--pulse"></span>${esc(text)}</span>`;
+}
 
 /* ---------- champions tab ---------- */
 function topCounts(values, n) {
@@ -835,10 +855,14 @@ function renderProfile() {
       </aside>
       <section class="history">
         ${queueChips()}
-        ${visibleMatches().length ? `<ol class="matches">${visibleMatches().map(matchRow).join("")}</ol>` : `<p class="status glass">No games in this filter.</p>`}
-        ${moreButton()}
+        ${visibleMatches().length ? `<ol class="matches">${visibleMatches().slice(0, shownRows).map(matchRow).join("")}</ol>` : `<p class="status glass">No games in this filter.</p>`}
+        ${shownRows < visibleMatches().length ? `<p class="tiny note scroll-more">Scroll for more games</p>` : moreButton()}
       </section>
     </div>`;
+
+  // Re-rendering replaces the panes, so keep where each one was scrolled to.
+  const scrolled = SCROLL_PANES.map((sel) => [sel, view.querySelector(sel)?.scrollTop ?? 0]);
+  tip.hidden = true;
 
   view.innerHTML = `
     <section class="profile-head">
@@ -870,7 +894,14 @@ function renderProfile() {
         .join("")}
     </nav>
     ${body}`;
+
+  for (const [sel, top] of scrolled) {
+    const pane = view.querySelector(sel);
+    if (pane) pane.scrollTop = top;
+  }
 }
+
+const SCROLL_PANES = [".sidebar", ".history", ".champs-view__list", ".champs-view__detail", ".live"];
 
 /* ---------- actions ---------- */
 async function ensureStatic() {
@@ -878,6 +909,10 @@ async function ensureStatic() {
 }
 
 async function search(riotId, plat = regionSelect.value, nextTab = "overview") {
+  const token = ++loadToken; // cancels background loading for the previous profile
+  filling = false;
+  fillStatus = null;
+  extraGames = 0;
   platform = plat;
   regionSelect.value = plat;
   idInput.value = riotId;
@@ -894,11 +929,13 @@ async function search(riotId, plat = regionSelect.value, nextTab = "overview") {
     liveRanks = null;
     selectedChamp = null;
     queueFilter = "all";
+    shownRows = ROW_STEP;
     tab = nextTab === "live" && !P.live ? "overview" : nextTab;
     addRecent(`${P.gameName}#${P.tagLine}`, platform);
     renderProfile();
     if (P.page.skipped) toast(`${plural(P.page.skipped, "game")} couldn't load. Update in a minute.`);
     if (tab === "live") loadLiveRanks();
+    fillGames(token);
     return true;
   } catch (err) {
     renderError(typeof err === "string" ? err : "Something went wrong. Try again.");
@@ -908,23 +945,52 @@ async function search(riotId, plat = regionSelect.value, nextTab = "overview") {
   }
 }
 
-async function loadMore() {
-  if (loadingMore) return;
-  loadingMore = true;
-  renderProfile();
-  try {
-    const page = await invoke("get_more_matches", { puuid: P.puuid, platform, start: nextStart });
-    nextStart += 10;
-    hasMore = page.hasMore;
-    const known = new Set(matches.map((m) => m.id));
-    matches.push(...page.matches.filter((m) => !known.has(m.id)));
-    if (page.skipped) toast(`${plural(page.skipped, "game")} couldn't load.`);
-  } catch (err) {
-    toast(typeof err === "string" ? err : "Couldn't load more games.");
-  } finally {
-    loadingMore = false;
-    renderProfile();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Keep loading older games in the background until the target is reached.
+    Stats re-render as each batch arrives; Riot's rate limit is waited out. */
+async function fillGames(token) {
+  if (!hasMore || nextStart >= targetGames()) return;
+  filling = true;
+  if (tab !== "live") renderProfile();
+  while (token === loadToken && hasMore && nextStart < targetGames()) {
+    const count = Math.min(20, targetGames() - nextStart);
+    try {
+      const page = await invoke("get_more_matches", { puuid: P.puuid, platform, start: nextStart, count });
+      if (token !== loadToken) return;
+      nextStart += count;
+      hasMore = page.hasMore;
+      const known = new Set(matches.map((m) => m.id));
+      matches.push(...page.matches.filter((m) => !known.has(m.id)));
+    } catch (err) {
+      if (token !== loadToken) return;
+      const message = typeof err === "string" ? err : "Couldn't load more games.";
+      if (/rate limit/i.test(message)) {
+        const secs = Number(/(\d+) seconds/.exec(message)?.[1] ?? 60);
+        for (let left = secs; left > 0 && token === loadToken; left--) {
+          fillStatus = `Riot's rate limit: continuing in ${left}s… (${matches.length} games so far)`;
+          if (tab !== "live" && (left === secs || left % 5 === 0)) renderProfile();
+          await sleep(1000);
+        }
+        fillStatus = null;
+        continue;
+      }
+      toast(message);
+      break;
+    }
+    if (tab !== "live") renderProfile();
   }
+  if (token === loadToken) {
+    filling = false;
+    fillStatus = null;
+    if (tab !== "live") renderProfile();
+  }
+}
+
+function loadMore() {
+  if (filling) return;
+  extraGames = nextStart + 20 - (settings.gamesToLoad || 0);
+  fillGames(loadToken);
 }
 
 form.addEventListener("submit", (e) => {
@@ -954,6 +1020,7 @@ document.addEventListener("click", (e) => {
     if (tab === "live") loadLiveRanks();
   } else if (action === "queue") {
     queueFilter = el.dataset.queue;
+    shownRows = ROW_STEP;
     renderProfile();
   } else if (action === "champ") {
     selectedChamp = el.dataset.champ;
@@ -974,6 +1041,8 @@ document.addEventListener("click", (e) => {
     settingsDialog.close();
   } else if (action === "save-key") {
     saveKey();
+  } else if (action === "clear-cache") {
+    clearCache();
   } else if (action === "check-update") {
     checkUpdate(true);
   } else if (action === "install-update") {
@@ -982,6 +1051,20 @@ document.addEventListener("click", (e) => {
     if (client?.riotId) search(client.riotId, client.platform ?? platform, client.phase === "InProgress" ? "live" : "overview");
   }
 });
+
+// Infinite scroll: draw more match rows as the history nears its end.
+view.addEventListener(
+  "scroll",
+  (e) => {
+    const pane = e.target;
+    if (!(pane instanceof Element) || !pane.matches(".history")) return;
+    if (pane.scrollHeight - pane.scrollTop - pane.clientHeight > 400) return;
+    if (shownRows >= visibleMatches().length) return;
+    shownRows += ROW_STEP;
+    renderProfile();
+  },
+  true
+);
 
 // Keyboard support for clickable table rows.
 view.addEventListener("keydown", (e) => {
@@ -1022,14 +1105,16 @@ async function refreshKeyStatus() {
     const info = await invoke("app_info");
     $("#key-status").textContent = info.keySource
       ? `Using the key ending ${info.keyHint} from ${info.keySource}.`
-      : "No key saved yet.";
+      : "No key saved yet. Searches won't work until you add one.";
     $("#update-status").textContent = `RiftLens ${info.version}`;
+    $("#cache-status").textContent = `Saved matches: ${info.cachedMatches} (${(info.cacheBytes / 1048576).toFixed(1)} MB)`;
   } catch {}
 }
 
 function openSettings() {
   sizeSelect.value = settings.size;
   defaultRegion.value = settings.region;
+  gamesSelect.value = String(settings.gamesToLoad);
   $("#set-motion").checked = settings.motion;
   $("#set-auto-profile").checked = settings.autoProfile;
   $("#set-auto-live").checked = settings.autoLive;
@@ -1071,6 +1156,26 @@ defaultRegion.addEventListener("change", () => {
   settings.region = defaultRegion.value;
   saveSettings();
 });
+const gamesSelect = $("#games-to-load");
+gamesSelect.addEventListener("change", () => {
+  settings.gamesToLoad = Number(gamesSelect.value);
+  saveSettings();
+  // Top up the open profile to the new target.
+  if (P && !filling) {
+    extraGames = 0;
+    fillGames(loadToken);
+  }
+});
+
+async function clearCache() {
+  try {
+    await invoke("clear_cache");
+    await refreshKeyStatus();
+    toast("Saved matches cleared.");
+  } catch (err) {
+    toast(typeof err === "string" ? err : "Couldn't clear saved matches.");
+  }
+}
 for (const [id, key] of [
   ["#set-motion", "motion"],
   ["#set-auto-profile", "autoProfile"],
@@ -1145,9 +1250,12 @@ async function pollClient() {
     clientChip.hidden = true;
   }
 
-  if (!checkedLaunch) {
+  // On launch, open the logged-in profile once the client answers (give it up to a minute).
+  if (!checkedLaunch && (client?.riotId || performance.now() > 60000)) {
     checkedLaunch = true;
-    if (client?.riotId && settings.autoProfile && !P) search(client.riotId, client.platform ?? settings.region);
+    if (client?.riotId && settings.autoProfile && !P && !form.hasAttribute("aria-busy")) {
+      search(client.riotId, client.platform ?? settings.region);
+    }
   }
   if (client?.riotId && settings.autoLive && client.phase === "InProgress" && lastPhase && lastPhase !== "InProgress") {
     // Give Riot's live-game data a few seconds to appear.

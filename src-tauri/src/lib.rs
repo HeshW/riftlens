@@ -180,26 +180,24 @@ fn key_file() -> Option<PathBuf> {
 }
 
 /// The key and where it came from. Read on every request, so a fresh
-/// development key works without restarting the app. A .env file (used while
-/// developing) wins over the key saved in Settings.
+/// development key works without restarting the app. The key saved in
+/// Settings always wins; dev builds (`npm run tauri dev`) fall back to .env.
 fn find_key() -> Option<(String, &'static str)> {
-    if let Ok(iter) = dotenvy::from_filename_iter(".env") {
-        for (k, v) in iter.flatten() {
-            if k == "RIOT_API_KEY" && !v.trim().is_empty() {
-                return Some((v.trim().to_string(), ".env file"));
-            }
-        }
-    }
     if let Some(saved) = key_file().and_then(|f| std::fs::read_to_string(f).ok()) {
         if !saved.trim().is_empty() {
             return Some((saved.trim().to_string(), "Settings"));
         }
     }
-    std::env::var("RIOT_API_KEY")
-        .ok()
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
-        .map(|v| (v, "environment variable"))
+    if cfg!(debug_assertions) {
+        if let Ok(iter) = dotenvy::from_filename_iter(".env") {
+            for (k, v) in iter.flatten() {
+                if k == "RIOT_API_KEY" && !v.trim().is_empty() {
+                    return Some((v.trim().to_string(), ".env file (dev build)"));
+                }
+            }
+        }
+    }
+    None
 }
 
 fn api_key() -> Result<String, String> {
@@ -269,19 +267,71 @@ fn text(v: &Value) -> String {
     v.as_str().unwrap_or_default().to_string()
 }
 
+/// Finished matches are saved here, so a profile opened again only fetches
+/// games played since last time.
+fn match_dir() -> Option<PathBuf> {
+    Some(APP.get()?.path().app_cache_dir().ok()?.join("matches"))
+}
+
+fn match_file(id: &str) -> Option<PathBuf> {
+    // Match ids look like EUW1_7012345678; keep only safe filename characters.
+    let safe: String = id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+    Some(match_dir()?.join(format!("{safe}.json")))
+}
+
 async fn get_match(state: &AppState, region: &str, id: &str) -> Result<Value, String> {
     let cached = state.match_cache.lock().unwrap().get(id).cloned();
     if let Some(m) = cached {
         return Ok(m);
     }
-    let url = format!("https://{region}.api.riotgames.com/lol/match/v5/matches/{id}");
-    let m = riot_get(&state.http, &url).await?;
+    let file = match_file(id);
+    let on_disk = file
+        .as_ref()
+        .and_then(|f| std::fs::read(f).ok())
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+    let m = match on_disk {
+        Some(m) => m,
+        None => {
+            let url = format!("https://{region}.api.riotgames.com/lol/match/v5/matches/{id}");
+            let m = riot_get(&state.http, &url).await?;
+            if let Some(f) = &file {
+                if let Some(dir) = f.parent() {
+                    let _ = std::fs::create_dir_all(dir);
+                }
+                let _ = std::fs::write(f, serde_json::to_vec(&m).unwrap_or_default());
+            }
+            m
+        }
+    };
     state
         .match_cache
         .lock()
         .unwrap()
         .insert(id.to_string(), m.clone());
     Ok(m)
+}
+
+/// Number and total size of saved matches.
+fn cache_usage() -> (u64, u64) {
+    let Some(entries) = match_dir().and_then(|d| std::fs::read_dir(d).ok()) else {
+        return (0, 0);
+    };
+    entries
+        .flatten()
+        .filter_map(|e| e.metadata().ok())
+        .filter(|m| m.is_file())
+        .fold((0, 0), |(n, bytes), m| (n + 1, bytes + m.len()))
+}
+
+#[tauri::command]
+fn clear_cache(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    state.match_cache.lock().unwrap().clear();
+    match match_dir() {
+        Some(dir) if dir.exists() => {
+            std::fs::remove_dir_all(dir).map_err(|e| format!("Couldn't clear saved matches: {e}"))
+        }
+        _ => Ok(()),
+    }
 }
 
 fn summarize(m: &Value) -> Option<MatchSummary> {
@@ -352,9 +402,10 @@ async fn match_page(
     region: &str,
     puuid: &str,
     start: usize,
+    count: usize,
 ) -> Result<MatchPage, String> {
     let url = format!(
-        "https://{region}.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start={start}&count={MATCH_PAGE}"
+        "https://{region}.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start={start}&count={count}"
     );
     let ids: Vec<String> =
         serde_json::from_value(riot_get(&state.http, &url).await?).unwrap_or_default();
@@ -377,7 +428,7 @@ async fn match_page(
     }
     Ok(MatchPage {
         skipped: ids.len() - matches.len(),
-        has_more: ids.len() == MATCH_PAGE,
+        has_more: ids.len() == count,
         matches,
     })
 }
@@ -466,7 +517,7 @@ async fn get_profile(
         riot_get(http, &league_url),
         riot_get(http, &mastery_url),
         riot_get(http, &live_url),
-        match_page(&state, match_region, &puuid, 0),
+        match_page(&state, match_region, &puuid, 0, MATCH_PAGE),
     );
 
     let summoner = summoner.map_err(|e| {
@@ -505,10 +556,11 @@ async fn get_more_matches(
     puuid: String,
     platform: String,
     start: usize,
+    count: usize,
     state: tauri::State<'_, AppState>,
 ) -> Result<MatchPage, String> {
     let (_, match_region) = routing(&platform)?;
-    match_page(&state, match_region, &puuid, start).await
+    match_page(&state, match_region, &puuid, start, count.clamp(1, 100)).await
 }
 
 /// Solo/Duo and Flex ranks for each player in a live game.
@@ -738,8 +790,11 @@ async fn client_status(state: tauri::State<'_, AppState>) -> Result<Option<Clien
 #[tauri::command]
 fn app_info(app: AppHandle) -> Value {
     let key = find_key();
+    let (cached_matches, cache_bytes) = cache_usage();
     json!({
         "version": app.package_info().version.to_string(),
+        "cachedMatches": cached_matches,
+        "cacheBytes": cache_bytes,
         "keySource": key.as_ref().map(|k| k.1),
         "keyHint": key.map(|(k, _)| {
             let tail: String = k.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect();
@@ -819,6 +874,7 @@ pub fn run() {
             client_status,
             app_info,
             save_key,
+            clear_cache,
             check_update,
             install_update
         ])

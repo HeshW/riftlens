@@ -87,6 +87,10 @@
             <button type="button" class="btn btn--small" data-action="save-key">Save</button>
           </div>
           <p class="tiny">Development keys expire every 24 hours. Get a new one at developer.riotgames.com.</p>
+          <div class="setting-row setting-row--split">
+            <span class="tiny" id="cache-status">Saved matches: …</span>
+            <button type="button" class="btn btn--small btn--ghost" data-action="clear-cache">Clear</button>
+          </div>
         </section>
 
         <section class="setting-group">
@@ -98,6 +102,15 @@
               <option value="1280x720">1280 × 720</option>
               <option value="1600x900">1600 × 900</option>
               <option value="1920x1080">1920 × 1080</option>
+            </select>
+          </label>
+          <label class="setting-row setting-row--split">
+            <span>Games to load</span>
+            <select id="games-to-load" class="field field--select">
+              <option value="0">All available</option>
+              <option value="100">Last 100</option>
+              <option value="50">Last 50</option>
+              <option value="20">Last 20</option>
             </select>
           </label>
           <label class="setting-row setting-row--split">
