@@ -10,7 +10,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
-const MATCH_PAGE: usize = 10;
+const MATCH_PAGE: usize = 20;
 const NOT_FOUND: &str = "NOT_FOUND";
 const MAX_RATE_WAIT_SECS: u64 = 30;
 
@@ -73,6 +73,7 @@ struct Mastery {
     champion_id: i64,
     level: i64,
     points: i64,
+    last_played: i64,
 }
 
 #[derive(Serialize)]
@@ -510,7 +511,7 @@ async fn get_profile(
     let base = format!("https://{platform}.api.riotgames.com/lol");
     let summoner_url = format!("{base}/summoner/v4/summoners/by-puuid/{puuid}");
     let league_url = format!("{base}/league/v4/entries/by-puuid/{puuid}");
-    let mastery_url = format!("{base}/champion-mastery/v4/champion-masteries/by-puuid/{puuid}/top?count=5");
+    let mastery_url = format!("{base}/champion-mastery/v4/champion-masteries/by-puuid/{puuid}");
     let live_url = format!("{base}/spectator/v5/active-games/by-summoner/{puuid}");
     let (summoner, leagues, mastery, live, page) = futures::join!(
         riot_get(http, &summoner_url),
@@ -542,6 +543,7 @@ async fn get_profile(
                 champion_id: int(&m["championId"]),
                 level: int(&m["championLevel"]),
                 points: int(&m["championPoints"]),
+                last_played: int(&m["lastPlayTime"]),
             })
             .collect(),
         // Live game is a bonus: a failure there shouldn't sink the profile.

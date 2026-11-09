@@ -1,6 +1,6 @@
 [package]
 name = "riftlens"
-version = "0.2.1"
+version = "0.2.2"
 description = "RiftLens: League of Legends stats in the LegacyTech design system"
 authors = ["LegacyTech"]
 edition = "2024"

@@ -1719,3 +1719,16 @@ button.player-link:hover {
     transition: none !important;
   }
 }
+
+/* Champions with mastery but no games in the loaded history */
+.champ-table tr.is-empty td {
+  color: var(--muted-2);
+}
+
+.champ-table tr.is-empty .champ {
+  opacity: 0.6;
+}
+
+.muted-cell {
+  color: var(--muted-2);
+}

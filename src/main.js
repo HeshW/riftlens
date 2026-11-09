@@ -55,7 +55,7 @@ let client = null; // League client status
 let loadToken = 0;
 let filling = false;
 let fillStatus = null;
-let extraGames = 0;
+let fillTarget = 0; // load older games until nextStart reaches this
 // Match rows drawn in the history; grows as you scroll (all loaded games still count in stats).
 const ROW_STEP = 20;
 let shownRows = ROW_STEP;
@@ -434,7 +434,7 @@ function championsCard(played) {
           .map(
             (c) => `
           <li>
-            <button type="button" class="champ-row champ-row--button" data-action="champ" data-champ="${esc(c.name)}" title="Open ${esc(champName(c.name))}">
+            <button type="button" class="champ-row champ-row--button" data-action="champ" data-champ="${esc(champKey(c.name))}" title="Open ${esc(champName(c.name))}">
               ${champImg(c.name, "champ champ--sm")}
               <div><p class="champ-row__name">${esc(champName(c.name))}</p><p class="tiny num">${(c.cs / Math.max(c.mins, 1)).toFixed(1)} CS/m</p></div>
               <div class="champ-row__right"><p class="num">${ratio(c.k, c.d, c.a)}</p><p class="tiny num">${plural(c.games, "game")} · ${pct(c.wins, c.games)}%</p></div>
@@ -451,6 +451,7 @@ function masteryCard() {
     "Mastery",
     P.mastery.length
       ? `<ul class="list">${P.mastery
+          .slice(0, 5)
           .map((m) => {
             const c = champById(m.championId);
             return `
@@ -611,17 +612,18 @@ function matchDetails(m) {
 
 const moreButton = () => {
   if (filling) return "";
-  if (hasMore) return `<button type="button" class="btn btn--ghost more" data-action="more">Load 20 more games</button>`;
+  if (hasMore) return `<button type="button" class="btn btn--ghost more" data-action="more">Load more games</button>`;
   return matches.length > MATCH_PAGE ? `<p class="tiny note">That's all of this player's available games.</p>` : "";
 };
 
-const MATCH_PAGE = 10;
-const targetGames = () => (settings.gamesToLoad || Infinity) + extraGames;
+const MATCH_PAGE = 20; // first page from get_profile, and each page after
+// How far back the Champions tab loads (Settings; 0 = all available).
+const championTarget = () => settings.gamesToLoad || Infinity;
 
 function loadingNote() {
   if (!filling) return "";
-  const target = targetGames();
-  const text = fillStatus ?? `Loading games… ${matches.length}${Number.isFinite(target) ? ` / ${target}` : ""}`;
+  const text =
+    fillStatus ?? `Loading games… ${matches.length}${Number.isFinite(fillTarget) ? ` / ${fillTarget}` : ""}`;
   return `<span class="loading-note"><span class="signal signal--pulse"></span>${esc(text)}</span>`;
 }
 
@@ -640,40 +642,81 @@ function isCoreItem(id) {
   return tags.includes("Boots") || it.gold >= 1000;
 }
 
+/** Every champion the player has played: mastery (one request, whole account)
+    merged with stats from the games loaded so far. Keyed by Data Dragon id. */
+function championRows(played) {
+  const rows = new Map();
+  for (const m of P.mastery) {
+    const id = champById(m.championId).id;
+    if (id) rows.set(id, { key: id, stats: null, mastery: m });
+  }
+  for (const c of championStats(played)) {
+    const key = champKey(c.name);
+    rows.set(key, { key, mastery: rows.get(key)?.mastery ?? null, stats: c });
+  }
+  return [...rows.values()].sort(
+    (a, b) => (b.stats?.games ?? 0) - (a.stats?.games ?? 0) || (b.mastery?.points ?? 0) - (a.mastery?.points ?? 0)
+  );
+}
+
 function championsTab() {
   const played = playedMatches();
-  const stats = championStats(played);
-  if (!stats.length) return `<p class="status glass">No games in this filter yet.</p>`;
-  if (!selectedChamp || !stats.some((c) => c.name === selectedChamp)) selectedChamp = stats[0].name;
+  const rows = championRows(played);
+  if (!rows.length) return `<p class="status glass">No champions played yet.</p>`;
+  if (!selectedChamp || !rows.some((r) => r.key === selectedChamp)) selectedChamp = rows[0].key;
 
   const list = `
     <table class="champ-table">
-      <thead><tr><th>Champion</th><th>Games</th><th>Win</th><th>KDA</th><th>CS/m</th><th>Dmg/m</th></tr></thead>
-      <tbody>${stats
-        .map(
-          (c) => `
-        <tr class="${c.name === selectedChamp ? "is-on" : ""}" data-action="champ" data-champ="${esc(c.name)}" tabindex="0">
-          <td><div class="champ-cell">${champImg(c.name, "champ champ--sm")}<span>${esc(champName(c.name))}</span></div></td>
-          <td class="num">${c.games}</td>
-          <td class="num">${pct(c.wins, c.games)}%</td>
-          <td class="num">${ratio(c.k, c.d, c.a)}</td>
-          <td class="num">${(c.cs / Math.max(c.mins, 1)).toFixed(1)}</td>
-          <td class="num">${Math.round(c.dmg / Math.max(c.mins, 1))}</td>
-        </tr>`
-        )
+      <thead><tr><th>Champion</th><th>Games</th><th>Win</th><th>KDA</th><th>CS/m</th><th>Mastery</th></tr></thead>
+      <tbody>${rows
+        .map(({ key, stats: c, mastery: m }) => {
+          const dash = `<td class="num muted-cell">–</td>`;
+          return `
+        <tr class="${key === selectedChamp ? "is-on" : ""}${c ? "" : " is-empty"}" data-action="champ" data-champ="${esc(key)}" tabindex="0">
+          <td><div class="champ-cell">${champImg(key, "champ champ--sm")}<span>${esc(champName(key))}</span></div></td>
+          ${c ? `<td class="num">${c.games}</td>` : dash}
+          ${c ? `<td class="num">${pct(c.wins, c.games)}%</td>` : dash}
+          ${c ? `<td class="num">${ratio(c.k, c.d, c.a)}</td>` : dash}
+          ${c ? `<td class="num">${(c.cs / Math.max(c.mins, 1)).toFixed(1)}</td>` : dash}
+          <td class="num">${m ? thousands(m.points) : "–"}</td>
+        </tr>`;
+        })
         .join("")}</tbody>
     </table>`;
 
   return `
     <div class="champs-view">
-      <section class="champs-view__list">${list}${moreButton()}</section>
-      <section class="champs-view__detail">${championDetail(selectedChamp, played, stats)}</section>
+      <section class="champs-view__list">${list}</section>
+      <section class="champs-view__detail">${championDetail(rows.find((r) => r.key === selectedChamp), played)}</section>
     </div>`;
 }
 
-function championDetail(name, played, stats) {
-  const games = played.filter((m) => me(m).champion === name);
-  const c = stats.find((x) => x.name === name);
+function championDetail(row, played) {
+  const name = row.key;
+  const games = played.filter((m) => champKey(me(m).champion) === name);
+  const c = row.stats;
+  const m = row.mastery;
+  const masteryLine = m
+    ? `Mastery ${m.level} · ${thousands(m.points)} pts${m.lastPlayed ? ` · last played ${timeAgo(m.lastPlayed)}` : ""}`
+    : "";
+
+  if (!c) {
+    return `
+      <div class="champ-hero">
+        ${champImg(name, "champ champ--lg")}
+        <div>
+          <p class="micro">${esc(masteryLine)}</p>
+          <h2 class="champ-hero__name">${esc(champName(name))}</h2>
+        </div>
+      </div>
+      <p class="status glass">${
+        filling
+          ? "Still loading this player's games. Stats for this champion appear once a game with it loads."
+          : queueFilter !== "all"
+            ? "No games on this champion in this filter."
+            : "No games on this champion in Riot's available match history (it only goes back about two years). Mastery counts older games too."
+      }</p>`;
+  }
   const mine = games.map(me);
 
   const core = topCounts(mine.flatMap((p) => [...new Set(p.items.filter(isCoreItem))]), 6);
@@ -703,6 +746,7 @@ function championDetail(name, played, stats) {
       ${champImg(name, "champ champ--lg")}
       <div>
         <p class="micro">${plural(c.games, "game")}${roles.length ? ` · ${roles.map(([r]) => ROLES[r]).join(" / ")}` : ""}</p>
+        ${masteryLine ? `<p class="tiny">${esc(masteryLine)}</p>` : ""}
         <h2 class="champ-hero__name">${esc(champName(name))}</h2>
       </div>
       <dl class="champ-hero__stats">
@@ -766,7 +810,7 @@ function championDetail(name, played, stats) {
           .join("")}</ul>`
       )}
     </div>
-    <p class="tiny note">Based on the ${plural(played.length, "game")} loaded. Load more games for a fuller picture.</p>`;
+    <p class="tiny note">Based on ${plural(played.length, "game")}${filling ? ", still loading older games" : hasMore ? " (Settings limits how far back the Champions tab loads)" : ", the whole available history"}.</p>`;
 }
 
 /* ---------- live game ---------- */
@@ -912,7 +956,7 @@ async function search(riotId, plat = regionSelect.value, nextTab = "overview") {
   const token = ++loadToken; // cancels background loading for the previous profile
   filling = false;
   fillStatus = null;
-  extraGames = 0;
+  fillTarget = 0;
   platform = plat;
   regionSelect.value = plat;
   idInput.value = riotId;
@@ -923,7 +967,7 @@ async function search(riotId, plat = regionSelect.value, nextTab = "overview") {
     await ensureStatic();
     P = await invoke("get_profile", { riotId, platform });
     matches = P.page.matches;
-    nextStart = 10;
+    nextStart = MATCH_PAGE;
     hasMore = P.page.hasMore;
     expanded.clear();
     liveRanks = null;
@@ -935,7 +979,7 @@ async function search(riotId, plat = regionSelect.value, nextTab = "overview") {
     renderProfile();
     if (P.page.skipped) toast(`${plural(P.page.skipped, "game")} couldn't load. Update in a minute.`);
     if (tab === "live") loadLiveRanks();
-    fillGames(token);
+    if (tab === "champions") requestGames(championTarget());
     return true;
   } catch (err) {
     renderError(typeof err === "string" ? err : "Something went wrong. Try again.");
@@ -950,11 +994,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** Keep loading older games in the background until the target is reached.
     Stats re-render as each batch arrives; Riot's rate limit is waited out. */
 async function fillGames(token) {
-  if (!hasMore || nextStart >= targetGames()) return;
+  if (!hasMore || nextStart >= fillTarget) return;
   filling = true;
   if (tab !== "live") renderProfile();
-  while (token === loadToken && hasMore && nextStart < targetGames()) {
-    const count = Math.min(20, targetGames() - nextStart);
+  while (token === loadToken && hasMore && nextStart < fillTarget) {
+    const count = Math.min(MATCH_PAGE, fillTarget - nextStart);
     try {
       const page = await invoke("get_more_matches", { puuid: P.puuid, platform, start: nextStart, count });
       if (token !== loadToken) return;
@@ -987,11 +1031,15 @@ async function fillGames(token) {
   }
 }
 
-function loadMore() {
-  if (filling) return;
-  extraGames = nextStart + 20 - (settings.gamesToLoad || 0);
-  fillGames(loadToken);
+/** Ask for games up to `target`; starts loading unless a load is already running
+    (a running load picks up the higher target). */
+function requestGames(target) {
+  fillTarget = Math.max(fillTarget, target);
+  if (!filling) fillGames(loadToken);
 }
+
+// Overview: one more page. Champions tab: the whole history (or the Settings limit).
+const loadMore = () => requestGames(nextStart + MATCH_PAGE);
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -1018,6 +1066,7 @@ document.addEventListener("click", (e) => {
     tab = el.dataset.tab;
     renderProfile();
     if (tab === "live") loadLiveRanks();
+    if (tab === "champions") requestGames(championTarget());
   } else if (action === "queue") {
     queueFilter = el.dataset.queue;
     shownRows = ROW_STEP;
@@ -1026,6 +1075,7 @@ document.addEventListener("click", (e) => {
     selectedChamp = el.dataset.champ;
     tab = "champions";
     renderProfile();
+    requestGames(championTarget());
   } else if (action === "fav") {
     e.stopPropagation();
     toggleFav(el.dataset.riotId, el.dataset.platform);
@@ -1059,9 +1109,13 @@ view.addEventListener(
     const pane = e.target;
     if (!(pane instanceof Element) || !pane.matches(".history")) return;
     if (pane.scrollHeight - pane.scrollTop - pane.clientHeight > 400) return;
-    if (shownRows >= visibleMatches().length) return;
-    shownRows += ROW_STEP;
-    renderProfile();
+    if (shownRows < visibleMatches().length) {
+      shownRows += ROW_STEP;
+      renderProfile();
+    } else if (hasMore && !filling) {
+      shownRows += ROW_STEP;
+      loadMore();
+    }
   },
   true
 );
@@ -1161,10 +1215,7 @@ gamesSelect.addEventListener("change", () => {
   settings.gamesToLoad = Number(gamesSelect.value);
   saveSettings();
   // Top up the open profile to the new target.
-  if (P && !filling) {
-    extraGames = 0;
-    fillGames(loadToken);
-  }
+  if (P && tab === "champions") requestGames(championTarget());
 });
 
 async function clearCache() {

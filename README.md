@@ -27,9 +27,9 @@ LegacyTech design system.
 - **Fixed 16:9 window** like the League client (1024×576 to 1920×1080). The layout is drawn at
   1280×720 and scaled.
 - **Auto-updates** from GitHub Releases.
-- **Full history in the background**: the first 10 games show right away, then RiftLens keeps
-  loading older games (all available by default, or the last 20/50/100 in Settings) so the
-  Overview and Champions stats cover the whole history. The match list grows as you scroll.
+- **Loads on demand**: Overview shows 20 games and loads older ones as you scroll. The
+  Champions tab loads the whole available history (or the limit set in Settings) when you open
+  it, and lists every champion the player has mastery on, even ones not in the loaded games.
 - **Saved matches**: finished games are saved to disk (`%LOCALAPPDATA%\me.legacytech.riftlens`),
   so opening a profile again only fetches new games. Settings shows the size and can clear it.
 - Rate limits: when Riot's limit is hit, RiftLens waits it out and continues instead of failing.
