@@ -1,5 +1,21 @@
 /* RiftLens, styled with the LegacyTech design system (dark only).
    The app is a fixed 1280x720 frame, scaled to the window like the League client. */
+
+/* Bundled fonts (SIL Open Font License, see fonts/LICENSE.txt) so the app works offline. */
+@font-face {
+  font-family: Oxanium;
+  src: url("fonts/Oxanium-Variable.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Manrope;
+  src: url("fonts/Manrope-Variable.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
 :root {
   --bg: #050b18;
   --bg-raised: #0a1428;
@@ -280,9 +296,28 @@ img {
   cursor: pointer;
 }
 
-.field--size {
-  color: var(--ink-2);
-  font-size: 12px;
+.search__field {
+  position: relative;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-tile-sm);
+  background: var(--bg-raised);
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  border-color: var(--blue-soft);
+}
+
+.icon-btn .icon {
+  width: 18px;
+  height: 18px;
 }
 
 /* ---------- Buttons ---------- */
@@ -1157,6 +1192,513 @@ button.player-link:hover {
   box-shadow: var(--shadow);
   color: var(--ink-2);
   font-size: 13px;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* ---------- League client chip ---------- */
+.chip--client {
+  height: 30px;
+  border-color: var(--line-strong);
+  background: var(--bg-raised);
+  cursor: pointer;
+}
+
+.chip--client:hover {
+  border-color: var(--cyan);
+  color: var(--ink);
+}
+
+/* ---------- Search history menu ---------- */
+.search-menu {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  z-index: 60;
+  width: 300px;
+  padding: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-tile);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow);
+}
+
+.menu-label {
+  padding: 6px 8px 4px;
+}
+
+.menu-row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+
+.menu-row:hover {
+  background: rgba(141, 180, 255, 0.08);
+}
+
+.menu-row__main {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-row__main .tiny {
+  display: inline;
+  font-family: var(--display);
+  color: var(--muted-2);
+}
+
+.star {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.icon--star {
+  width: 15px;
+  height: 15px;
+  stroke: var(--muted-2);
+}
+
+.star:hover .icon--star {
+  stroke: var(--cyan);
+}
+
+.star.is-on .icon--star {
+  stroke: var(--cyan);
+  fill: var(--cyan);
+}
+
+.star--lg {
+  display: inline-grid;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+.star--lg .icon--star {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- Queue filter ---------- */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted);
+  font: 500 12px var(--display);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.filter .num {
+  color: var(--muted-2);
+}
+
+.filter:hover {
+  border-color: var(--line-strong);
+  color: var(--ink-2);
+}
+
+.filter.is-on {
+  border-color: rgba(56, 213, 240, 0.5);
+  background: rgba(56, 213, 240, 0.08);
+  color: var(--ink);
+}
+
+.filter.is-on .num {
+  color: var(--cyan);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+/* ---------- Tooltip ---------- */
+.tip {
+  position: fixed;
+  z-index: 300;
+  max-width: 300px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-tile-sm);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+
+.tip__title {
+  font: 500 13.5px/1.3 var(--display);
+  color: var(--ink);
+}
+
+.tip__meta {
+  font: 500 11.5px var(--display);
+  color: var(--cyan);
+}
+
+.tip__body {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: pre-line;
+}
+
+/* ---------- Champions tab ---------- */
+.champs-view {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 14px;
+}
+
+.champs-view__list,
+.champs-view__detail {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 4px 14px 0;
+}
+
+.champ-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.champ-table th {
+  position: sticky;
+  top: 0;
+  padding: 6px 8px;
+  background: var(--bg);
+  font: 500 10.5px var(--display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  text-align: right;
+}
+
+.champ-table th:first-child {
+  text-align: left;
+}
+
+.champ-table td {
+  padding: 5px 8px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--ink-2);
+  text-align: right;
+}
+
+.champ-table td:first-child {
+  text-align: left;
+}
+
+.champ-table tbody tr {
+  cursor: pointer;
+}
+
+.champ-table tbody tr:hover td {
+  background: rgba(141, 180, 255, 0.05);
+}
+
+.champ-table tr.is-on td {
+  background: rgba(79, 140, 255, 0.12);
+  color: var(--ink);
+}
+
+.champ-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 500 13px var(--display);
+  color: var(--ink);
+}
+
+.champ--lg {
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--line-strong);
+}
+
+.champ-hero {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pass);
+  background:
+    var(--panel-highlight) top center / 100% 1px no-repeat,
+    radial-gradient(420px 220px at 100% 0%, rgba(79, 140, 255, 0.16), transparent 70%),
+    var(--panel);
+}
+
+.champ-hero__name {
+  margin: 4px 0 0;
+  font: 500 32px/1.05 var(--display);
+  letter-spacing: -0.035em;
+  color: var(--ink);
+}
+
+.champ-hero__stats {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 4px 22px;
+  margin: 0;
+}
+
+.champ-hero__stats dt {
+  font-size: 11px;
+  color: var(--muted-2);
+}
+
+.champ-hero__stats dd {
+  font: 500 17px var(--display);
+  color: var(--ink);
+}
+
+.champ-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.core-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.core-items li {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.item--lg {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+}
+
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.pick-row > :last-child {
+  margin-left: auto;
+}
+
+.mini--md {
+  width: 24px;
+  height: 24px;
+}
+
+.result-dot {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(141, 180, 255, 0.08);
+  font: 600 10.5px var(--display);
+  color: var(--muted-2);
+}
+
+.result-dot.is-win {
+  background: rgba(56, 213, 240, 0.14);
+  color: var(--cyan);
+}
+
+.note {
+  margin-top: 10px;
+}
+
+.champ-row--button {
+  width: 100%;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.champ-row--button:hover .champ-row__name {
+  color: var(--cyan);
+}
+
+/* ---------- Settings dialog ---------- */
+.settings {
+  width: 760px;
+  max-height: 640px;
+  padding: 22px 26px 26px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pass);
+  background:
+    var(--panel-highlight) top center / 100% 1px no-repeat,
+    radial-gradient(520px 300px at 100% 0%, rgba(79, 140, 255, 0.14), transparent 70%),
+    var(--panel-solid);
+  box-shadow: var(--shadow);
+  color: var(--muted);
+}
+
+.settings::backdrop {
+  background: rgba(2, 6, 14, 0.7);
+}
+
+.settings__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings__title {
+  margin: 8px 0 18px;
+  font: 500 32px/1.05 var(--display);
+  letter-spacing: -0.035em;
+  color: var(--ink);
+}
+
+.settings__title em {
+  font-style: normal;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.settings__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.setting-group {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-tile);
+  background: rgba(5, 11, 24, 0.4);
+}
+
+.setting-group__title {
+  margin: 0;
+  font: 500 15px var(--display);
+  color: var(--ink);
+}
+
+.setting-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.setting-row--split {
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.field--wide {
+  flex: 1;
+  min-width: 0;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.toggle input {
+  appearance: none;
+  position: relative;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  flex: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--bg-raised);
+  cursor: pointer;
+  transition: background-color 0.25s ease;
+}
+
+.toggle input::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--muted-2);
+  transition: transform 0.25s var(--ease);
+}
+
+.toggle input:checked {
+  background: rgba(56, 213, 240, 0.25);
+  border-color: rgba(56, 213, 240, 0.6);
+}
+
+.toggle input:checked::after {
+  transform: translateX(14px);
+  background: var(--cyan);
+}
+
+/* Motion off (Settings) or the OS reduced-motion setting stops all animation. */
+:root[data-motion="off"] *,
+:root[data-motion="off"] *::before,
+:root[data-motion="off"] *::after {
+  animation: none !important;
+  transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
