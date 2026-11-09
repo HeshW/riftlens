@@ -4,12 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RiftLens</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..700&family=Oxanium:wght@400..600&display=swap"
-      rel="stylesheet"
-    />
     <link rel="stylesheet" href="styles.css" />
     <script type="module" src="main.js" defer></script>
   </head>
@@ -22,9 +16,14 @@
         <span class="micro">LegacyTech / League stats</span>
       </div>
 
+      <button type="button" id="client-chip" class="chip chip--client" data-action="open-client" hidden></button>
+
       <form id="search" class="search" autocomplete="off">
-        <label class="sr-only" for="riot-id">Riot ID</label>
-        <input id="riot-id" class="field" type="text" placeholder="Name#TAG" spellcheck="false" required />
+        <div class="search__field">
+          <label class="sr-only" for="riot-id">Riot ID</label>
+          <input id="riot-id" class="field" type="text" placeholder="Name#TAG" spellcheck="false" required />
+          <div id="search-menu" class="search-menu" hidden></div>
+        </div>
         <label class="sr-only" for="region">Region</label>
         <select id="region" class="field field--select">
           <option value="euw1">EUW</option>
@@ -51,13 +50,14 @@
         </button>
       </form>
 
-      <label class="sr-only" for="window-size">Window size</label>
-      <select id="window-size" class="field field--select field--size" title="Window size">
-        <option value="1024x576">1024 × 576</option>
-        <option value="1280x720">1280 × 720</option>
-        <option value="1600x900">1600 × 900</option>
-        <option value="1920x1080">1920 × 1080</option>
-      </select>
+      <button type="button" class="icon-btn" data-action="open-settings" title="Settings" aria-label="Settings">
+        <svg class="icon" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"
+          />
+        </svg>
+      </button>
     </header>
 
     <main id="view" aria-live="polite"></main>
@@ -67,5 +67,77 @@
       officially involved in producing or managing Riot Games properties. Riot Games, and all associated
       properties are trademarks or registered trademarks of Riot Games, Inc.
     </footer>
+
+    <dialog id="settings" class="settings" aria-labelledby="settings-title">
+      <div class="settings__head">
+        <p class="micro chapter-label"><span class="signal"></span>RiftLens / Settings</p>
+        <button type="button" class="icon-btn" data-action="close-settings" aria-label="Close settings">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <h2 id="settings-title" class="settings__title">Your app. <em>Your way.</em></h2>
+
+      <div class="settings__grid">
+        <section class="setting-group">
+          <h3 class="setting-group__title">Riot API key</h3>
+          <p class="tiny" id="key-status">Checking…</p>
+          <div class="setting-row">
+            <label class="sr-only" for="key-input">Riot API key</label>
+            <input id="key-input" class="field field--wide" type="password" placeholder="RGAPI-…" spellcheck="false" />
+            <button type="button" class="btn btn--small" data-action="save-key">Save</button>
+          </div>
+          <p class="tiny">Development keys expire every 24 hours. Get a new one at developer.riotgames.com.</p>
+          <div class="setting-row setting-row--split">
+            <span class="tiny" id="cache-status">Saved matches: …</span>
+            <button type="button" class="btn btn--small btn--ghost" data-action="clear-cache">Clear</button>
+          </div>
+        </section>
+
+        <section class="setting-group">
+          <h3 class="setting-group__title">Display</h3>
+          <label class="setting-row setting-row--split">
+            <span>Window size</span>
+            <select id="window-size" class="field field--select">
+              <option value="1024x576">1024 × 576</option>
+              <option value="1280x720">1280 × 720</option>
+              <option value="1600x900">1600 × 900</option>
+              <option value="1920x1080">1920 × 1080</option>
+            </select>
+          </label>
+          <label class="setting-row setting-row--split">
+            <span>Games to load</span>
+            <select id="games-to-load" class="field field--select">
+              <option value="0">All available</option>
+              <option value="100">Last 100</option>
+              <option value="50">Last 50</option>
+              <option value="20">Last 20</option>
+            </select>
+          </label>
+          <label class="setting-row setting-row--split">
+            <span>Default region</span>
+            <select id="default-region" class="field field--select"></select>
+          </label>
+          <label class="toggle"><input type="checkbox" id="set-motion" /><span>Animations</span></label>
+        </section>
+
+        <section class="setting-group">
+          <h3 class="setting-group__title">League client</h3>
+          <p class="tiny" id="client-status">Looking for the League client…</p>
+          <label class="toggle"><input type="checkbox" id="set-auto-profile" /><span>Open my profile when RiftLens starts</span></label>
+          <label class="toggle"><input type="checkbox" id="set-auto-live" /><span>Show the live game when my game starts</span></label>
+        </section>
+
+        <section class="setting-group">
+          <h3 class="setting-group__title">Updates</h3>
+          <p class="tiny" id="update-status">RiftLens</p>
+          <div class="setting-row">
+            <button type="button" class="btn btn--small btn--ghost" data-action="check-update">Check for updates</button>
+          </div>
+          <label class="toggle"><input type="checkbox" id="set-auto-update" /><span>Check automatically on launch</span></label>
+        </section>
+      </div>
+    </dialog>
+
+    <div id="tip" class="tip" role="tooltip" hidden></div>
   </body>
 </html>
