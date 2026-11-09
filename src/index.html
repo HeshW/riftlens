@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RiftLens</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..700&family=Oxanium:wght@400..600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="main.js" defer></script>
+  </head>
+
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="pixel-trio" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="wordmark">Rift<span class="brand-accent">Lens</span></span>
+        <span class="micro">LegacyTech / League stats</span>
+      </div>
+
+      <form id="search" class="search" autocomplete="off">
+        <label class="sr-only" for="riot-id">Riot ID</label>
+        <input id="riot-id" class="field" type="text" placeholder="Name#TAG" spellcheck="false" required />
+        <label class="sr-only" for="region">Region</label>
+        <select id="region" class="field field--select">
+          <option value="euw1">EUW</option>
+          <option value="eun1">EUNE</option>
+          <option value="na1">NA</option>
+          <option value="kr">KR</option>
+          <option value="br1">BR</option>
+          <option value="la1">LAN</option>
+          <option value="la2">LAS</option>
+          <option value="oc1">OCE</option>
+          <option value="tr1">TR</option>
+          <option value="ru">RU</option>
+          <option value="jp1">JP</option>
+          <option value="me1">ME</option>
+          <option value="sg2">SG</option>
+          <option value="tw2">TW</option>
+          <option value="vn2">VN</option>
+        </select>
+        <button class="btn btn--small" type="submit">
+          Search
+          <span class="btn__glyph" aria-hidden="true">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+          </span>
+        </button>
+      </form>
+
+      <label class="sr-only" for="window-size">Window size</label>
+      <select id="window-size" class="field field--select field--size" title="Window size">
+        <option value="1024x576">1024 × 576</option>
+        <option value="1280x720">1280 × 720</option>
+        <option value="1600x900">1600 × 900</option>
+        <option value="1920x1080">1920 × 1080</option>
+      </select>
+    </header>
+
+    <main id="view" aria-live="polite"></main>
+
+    <footer class="footer">
+      RiftLens isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone
+      officially involved in producing or managing Riot Games properties. Riot Games, and all associated
+      properties are trademarks or registered trademarks of Riot Games, Inc.
+    </footer>
+  </body>
+</html>
